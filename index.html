@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シフトカレンダー</title>
+<link rel="icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="favicon-180.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh}
+.app{max-width:900px;margin:0 auto;padding:1rem}
+
+/* 設定画面 */
+#setup-screen{background:#fff;border-radius:12px;border:0.5px solid #ddd;padding:2rem;margin-top:2rem}
+#setup-screen h2{font-size:18px;font-weight:500;margin-bottom:0.5rem}
+#setup-screen p{font-size:13px;color:#666;margin-bottom:1.5rem;line-height:1.6}
+.setup-row{margin-bottom:1rem}
+.setup-row label{display:block;font-size:13px;color:#555;margin-bottom:4px}
+.setup-row input{width:100%;border:0.5px solid #ccc;border-radius:8px;padding:8px 10px;font-size:13px}
+.setup-row input:focus{outline:none;border-color:#378ADD}
+.btn-setup{background:#378ADD;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer;font-weight:500;margin-top:0.5rem}
+.btn-setup:hover{background:#185FA5}
+.setup-note{font-size:12px;color:#999;margin-top:1rem;line-height:1.7}
+.setup-note code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:11px}
+
+/* メイン */
+#main-screen{display:block}
+.header{display:flex;align-items:center;justify-content:space-between;padding:1rem 0 0.75rem}
+.header h1{font-size:18px;font-weight:500}
+.header-right{display:flex;align-items:center;gap:8px}
+.sync-status{font-size:11px;color:#999}
+.sync-status.ok{color:#1D9E75}
+.sync-status.err{color:#D85A30}
+.btn-settings{background:none;border:0.5px solid #ccc;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;color:#666}
+
+/* ナビ */
+.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.nav-title{font-size:17px;font-weight:500}
+.nav-btn{background:#fff;border:0.5px solid #ccc;border-radius:8px;padding:5px 14px;cursor:pointer;font-size:13px;color:#555}
+.nav-btn:hover{background:#f0f0f0}
+
+/* コピーバー */
+.copy-bar{background:#EAF3DE;border:0.5px solid #C0DD97;border-radius:10px;padding:10px 14px;margin-bottom:1rem;display:none;align-items:center;gap:10px;flex-wrap:wrap}
+.copy-bar.active{display:flex}
+.copy-bar-info{font-size:13px;color:#27500A;flex:1}
+.copy-bar-info span{font-weight:500}
+.copy-actions{display:flex;gap:6px;flex-wrap:wrap}
+.cb-btn{border:0.5px solid #ccc;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;background:#fff;color:#333}
+.cb-btn:hover{background:#f5f5f5}
+.cb-btn.primary{background:#378ADD;color:#fff;border-color:#378ADD}
+.cb-btn.primary:hover{background:#185FA5}
+.cb-btn.danger{color:#A32D2D;border-color:#F09595}
+.cb-btn.danger:hover{background:#FCEBEB}
+
+/* カレンダー */
+.cal-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -1rem;padding:0 1rem}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:1rem}
+@media(max-width:599px){.cal-grid{grid-template-columns:repeat(7,minmax(72px,1fr));min-width:504px}}
+.day-header{text-align:center;font-size:12px;font-weight:500;padding:6px 0;color:#888}
+.day-header.sun{color:#D85A30}.day-header.sat{color:#185FA5}
+.day-cell{background:#fff;border:0.5px solid #e0e0e0;border-radius:6px;min-height:90px;padding:5px;cursor:pointer;transition:border-color 0.15s;overflow:hidden}
+.day-cell:hover{border-color:#aaa}
+.day-cell.holiday{background:#f5f4f0;cursor:default}
+.day-cell.copy-src{border:1.5px solid #378ADD;background:#E6F1FB}
+.day-cell.manual-open{border:1.5px dashed #1D9E75!important;background:#F0FAF5!important;cursor:pointer!important}
+.day-cell.manual-closed{background:#e8e8e8!important;cursor:default!important}
+.day-cell.today .day-num{background:#378ADD;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center}
+.day-num{font-size:12px;font-weight:500;color:#333;width:20px;height:20px;display:flex;align-items:center;justify-content:center;margin-bottom:3px}
+.day-cell.holiday .day-num{color:#bbb}
+.day-cell.sun-cell .day-num{color:#D85A30}
+.day-cell.sat-cell .day-num{color:#185FA5}
+/* PC: 時刻+名前横並び */
+.slot-row{display:flex;align-items:center;gap:2px;margin-bottom:2px;flex-wrap:nowrap;overflow:hidden;width:100%}
+.slot-time-lbl{font-size:9px;color:#aaa;white-space:nowrap;flex-shrink:0;line-height:1.3}
+.slot-chips{display:flex;flex-wrap:nowrap;gap:2px;flex:1;overflow:hidden}
+.shift-chip{font-size:9px;border-radius:3px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4;flex-shrink:1;min-width:0}
+/* スマホ: 時刻上・名前下の縦レイアウト */
+@media(max-width:599px){
+  .slot-row{flex-direction:column;align-items:flex-start;gap:0;margin-bottom:3px}
+  .slot-time-lbl{font-size:10px;margin-bottom:1px}
+  .slot-chips{flex-wrap:wrap;gap:2px;width:100%}
+  .shift-chip{font-size:11px;padding:2px 4px;line-height:1.5}
+}
+
+/* パネル */
+.panel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:10;align-items:flex-end;justify-content:center}
+.panel-overlay.active{display:flex}
+@media(min-width:600px){.panel-overlay{align-items:center}}
+.panel{background:#fff;border-radius:16px 16px 0 0;padding:1.5rem;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+@media(min-width:600px){.panel{border-radius:16px}}
+.panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem}
+.panel-title{font-size:15px;font-weight:500}
+.close-panel{background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;line-height:1}
+.selected-date{font-size:13px;color:#888;margin-bottom:1rem}
+.panel-tabs{display:flex;gap:6px;margin-bottom:1rem}
+.tab-btn{border:0.5px solid #ccc;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;background:#fff;color:#888}
+.tab-btn.active{background:#378ADD;color:#fff;border-color:#378ADD}
+.form-row{display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap}
+.form-label{font-size:13px;color:#666;min-width:60px}
+select{border:0.5px solid #ccc;border-radius:8px;padding:8px 10px;font-size:13px;color:#333;background:#fff;min-width:150px}
+select:focus{outline:none;border-color:#378ADD}
+.slots-label{font-size:13px;color:#666;margin-bottom:8px}
+.slots-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem}
+.slot-btn{display:flex;flex-direction:column;align-items:center;border-radius:10px;border:1.5px solid #ddd;background:#fff;cursor:pointer;transition:all 0.15s;padding:8px 12px}
+.slot-btn:hover{border-color:#378ADD;background:#E6F1FB}
+.slot-btn.active{border-color:#378ADD;background:#378ADD}
+.slot-btn .s-num{font-size:11px;font-weight:500;color:#666}
+.slot-btn .s-time{font-size:10px;color:#aaa;margin-top:1px}
+.slot-btn.active .s-num,.slot-btn.active .s-time{color:#fff}
+.actions{display:flex;gap:8px;margin-top:0.5rem}
+.btn-primary{background:#378ADD;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:13px;cursor:pointer;font-weight:500}
+.btn-primary:hover{background:#185FA5}
+.btn-cancel{background:none;border:0.5px solid #ccc;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;color:#666}
+
+/* トースト */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2C2C2A;color:#fff;font-size:12px;padding:8px 16px;border-radius:8px;pointer-events:none;opacity:0;transition:opacity 0.2s;z-index:100;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* ローディング */
+.loading{text-align:center;padding:2rem;font-size:13px;color:#aaa}
+
+/* 削除セクション */
+.delete-entry{border:0.5px solid #e0e0e0;border-radius:8px;padding:10px;margin-bottom:8px}
+.delete-entry-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.delete-entry-name{font-size:13px;font-weight:500}
+.delete-all-btn{background:none;border:0.5px solid #F09595;border-radius:6px;padding:3px 8px;font-size:11px;color:#A32D2D;cursor:pointer}
+.delete-all-btn:hover{background:#FCEBEB}
+.delete-slots{display:flex;flex-wrap:wrap;gap:6px}
+.delete-slot-chip{display:flex;align-items:center;gap:4px;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;border:0.5px solid transparent}
+.delete-slot-chip:hover{border-color:#F09595;background:#FCEBEB}
+.delete-slot-chip .del-x{font-size:13px;color:#aaa;line-height:1}
+.delete-slot-chip:hover .del-x{color:#A32D2D}
+.delete-empty{font-size:13px;color:#aaa;text-align:center;padding:1rem 0}
+
+/* セル上部行 */
+.cell-top-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.cell-ctrl-btn{background:none;border:none;cursor:pointer;font-size:10px;line-height:1;padding:0;opacity:0;flex-shrink:0;transition:opacity 0.15s}
+.day-cell:hover .cell-ctrl-btn{opacity:0.5}
+.day-cell:hover .cell-ctrl-btn:hover{opacity:1}
+.day-cell.manual-open .cell-ctrl-btn,.day-cell.manual-closed .cell-ctrl-btn{opacity:0.8}
+.day-cell.holiday:hover .cell-ctrl-btn{opacity:0.5}
+
+/* スタッフ管理 */
+.staff-mgr{background:#fff;border:0.5px solid #e0e0e0;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem}
+.staff-mgr-body{display:none}
+.staff-mgr.open .staff-mgr-body{display:block}
+.staff-mgr-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.staff-mgr-arrow{font-size:11px;color:#aaa;transition:transform 0.2s}
+.staff-mgr.open .staff-mgr-arrow{transform:rotate(180deg)}
+.staff-mgr-title{font-size:13px;font-weight:500;color:#555;margin-bottom:8px}
+.staff-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.staff-tag{display:flex;align-items:center;gap:4px;border-radius:6px;padding:4px 8px;font-size:12px}
+.staff-tag-del{background:none;border:none;cursor:pointer;font-size:14px;color:#aaa;line-height:1;padding:0}
+.staff-tag-del:hover{color:#D85A30}
+.staff-add-row{display:flex;gap:6px}
+.staff-add-input{flex:1;border:0.5px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px}
+.staff-add-input:focus{outline:none;border-color:#378ADD}
+.staff-add-btn{background:#378ADD;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap}
+.staff-add-btn:hover{background:#185FA5}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 設定画面 -->
+  <div id="setup-screen" style="display:none">
+    <h2>Supabase 接続設定</h2>
+    <p>最初にSupabaseのプロジェクト情報を入力してください。<br>入力した情報はブラウザに保存され、次回から自動接続されます。</p>
+    <div class="setup-row">
+      <label>Supabase URL</label>
+      <input type="text" id="sb-url" placeholder="https://xxxxxxxxxx.supabase.co">
+    </div>
+    <div class="setup-row">
+      <label>Supabase Anon Key</label>
+      <input type="text" id="sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6...">
+    </div>
+    <button class="btn-setup" onclick="saveSettings()">接続して始める</button>
+    <div class="setup-note">
+      ※ Supabaseの「Project Settings → API Keys → Legacy」から取得できます。<br>
+      ※ このファイルはWebサーバー経由で開く必要があります（file:///では動作しません）。<br>
+      　<strong>→ ファイルをサーバーにアップロードするか、VS Codeの「Live Server」で開いてください。</strong><br><br>
+      ※ 以下のSQLでテーブルを作成してから接続してください：<br><br>
+      <code>create table shifts (</code><br>
+      <code>&nbsp;&nbsp;id uuid primary key default gen_random_uuid(),</code><br>
+      <code>&nbsp;&nbsp;date text not null,</code><br>
+      <code>&nbsp;&nbsp;name text not null,</code><br>
+      <code>&nbsp;&nbsp;slots text[] not null,</code><br>
+      <code>&nbsp;&nbsp;updated_at timestamptz default now()</code><br>
+      <code>);</code><br><br>
+      ※ RLSはオフ、またはanon向けにSELECT/INSERT/UPDATE/DELETE許可してください。
+    </div>
+  </div>
+
+  <!-- メイン画面 -->
+  <div id="main-screen">
+    <div class="header">
+      <h1>シフトカレンダー</h1>
+      <div class="header-right">
+        <span class="sync-status" id="sync-status">同期中...</span>
+        
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="nav-btn" id="prev">←</button>
+      <div class="nav-title" id="month-label"></div>
+      <button class="nav-btn" id="next">→</button>
+    </div>
+
+    <div class="staff-mgr" id="staff-mgr">
+      <div class="staff-mgr-toggle" onclick="document.getElementById('staff-mgr').classList.toggle('open')">
+        <div class="staff-mgr-title">👤 スタッフ管理</div>
+        <span class="staff-mgr-arrow">▼</span>
+      </div>
+      <div class="staff-mgr-body">
+        <div class="staff-list" id="staff-list" style="margin-top:8px"></div>
+        <div class="staff-add-row">
+          <input type="text" class="staff-add-input" id="staff-add-input" placeholder="名前を入力（例：山田 太郎）" maxlength="20">
+          <button class="staff-add-btn" onclick="addStaff()">追加</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="copy-bar" id="copy-bar">
+      <div class="copy-bar-info">コピー元: <span id="copy-src-label"></span></div>
+      <div class="copy-actions">
+        <button class="cb-btn primary" id="copy-same-dow">同じ曜日すべてに貼り付け</button>
+        <button class="cb-btn primary" id="copy-week">今週の残り全日に貼り付け</button>
+        <button class="cb-btn danger" id="copy-cancel">キャンセル</button>
+      </div>
+    </div>
+
+    <div class="cal-scroll"><div class="cal-grid" id="cal"></div></div>
+  </div>
+
+</div>
+
+<!-- パネル -->
+<div class="panel-overlay" id="panel-overlay" onclick="onOverlayClick(event)">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">シフト登録</div>
+      <button class="close-panel" onclick="closePanel()">✕</button>
+    </div>
+    <div class="selected-date" id="sel-date-label"></div>
+    <div class="panel-tabs">
+      <button class="tab-btn active" id="tab-edit" onclick="switchTab('edit')">編集</button>
+      <button class="tab-btn" id="tab-copy" onclick="switchTab('copy')">コピー</button>
+      <button class="tab-btn" id="tab-delete" onclick="switchTab('delete')">削除</button>
+    </div>
+    <div id="edit-section">
+      <div class="form-row">
+        <span class="form-label">スタッフ</span>
+        <select id="staff-select"></select>
+      </div>
+      <div class="slots-label" id="slots-label">コマを選択</div>
+      <div class="slots-grid" id="slots"></div>
+      <div class="actions">
+        <button class="btn-primary" id="save-btn">登録する</button>
+        <button class="btn-cancel" onclick="closePanel()">キャンセル</button>
+      </div>
+    </div>
+    <div id="delete-section" style="display:none">
+      <div id="delete-list"></div>
+    </div>
+    <div id="copy-section" style="display:none">
+      <p style="font-size:13px;color:#888;margin-bottom:12px">この日のシフトをコピーして他の日に貼り付けます</p>
+      <div class="actions">
+        <button class="btn-primary" id="start-copy-btn">コピーモードに入る</button>
+        <button class="btn-cancel" onclick="closePanel()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const WEEKDAY_SLOTS=[
+  {n:"1コマ",t:"16:00〜17:00",start:"16:00"},
+  {n:"2コマ",t:"17:20〜18:20",start:"17:20"},
+  {n:"3コマ",t:"18:40〜19:40",start:"18:40"},
+  {n:"4コマ",t:"20:00〜21:00",start:"20:00"}
+];
+const WEEKEND_SLOTS=[
+  {n:"1コマ",t:"9:20〜10:20",start:"9:20"},
+  {n:"2コマ",t:"10:40〜11:40",start:"10:40"},
+  {n:"3コマ",t:"13:00〜14:00",start:"13:00"},
+  {n:"4コマ",t:"14:20〜15:20",start:"14:20"},
+  {n:"5コマ",t:"15:50〜16:50",start:"15:50"},
+  {n:"6コマ",t:"17:10〜18:10",start:"17:10"}
+];
+const DAYS=["日","月","火","水","木","金","土"];
+
+// 日本の祝日（固定）
+const FIXED_HOLIDAYS={
+  "1-1":"元日","1-13":"成人の日(例)","2-11":"建国記念の日","2-23":"天皇誕生日",
+  "3-20":"春分の日","4-29":"昭和の日","5-3":"憲法記念日","5-4":"みどりの日",
+  "5-5":"こどもの日","7-21":"海の日(例)","8-11":"山の日","9-15":"敬老の日(例)",
+  "9-23":"秋分の日","10-13":"スポーツの日(例)","11-3":"文化の日","11-23":"勤労感謝の日"
+};
+// 移動祝日（ハッピーマンデー等）を年ごとに計算
+function getHolidays(y){
+  const h=new Set();
+  // 固定祝日
+  Object.keys(FIXED_HOLIDAYS).forEach(k=>{
+    const[mo,da]=k.split("-").map(Number);
+    h.add(`${y}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`);
+  });
+  // 成人の日（1月第2月曜）
+  h.add(nthMonday(y,1,2));
+  // 海の日（7月第3月曜）
+  h.add(nthMonday(y,7,3));
+  // 敬老の日（9月第3月曜）
+  h.add(nthMonday(y,9,3));
+  // スポーツの日（10月第2月曜）
+  h.add(nthMonday(y,10,2));
+  // 春分の日・秋分の日（簡易計算）
+  h.add(`${y}-03-${String(Math.floor(20.8431+0.242194*(y-1980)-Math.floor((y-1980)/4))).padStart(2,"0")}`);
+  h.add(`${y}-09-${String(Math.floor(23.2488+0.242194*(y-1980)-Math.floor((y-1980)/4))).padStart(2,"0")}`);
+  // 振替休日（祝日が日曜→翌月曜）
+  const extra=[];
+  h.forEach(ds=>{
+    const dt=new Date(ds);
+    if(dt.getDay()===0){
+      const next=new Date(dt);next.setDate(dt.getDate()+1);
+      extra.push(next.toISOString().slice(0,10));
+    }
+  });
+  extra.forEach(d=>h.add(d));
+  return h;
+}
+function nthMonday(y,mo,n){
+  const first=new Date(y,mo-1,1);
+  const offset=(8-first.getDay())%7; // 最初の月曜までの日数
+  const d=1+offset+(n-1)*7;
+  return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+// 第5週判定：月曜始まりで5行目（29行目以降で且つ同曜日が5回目）
+function isFifthWeek(y,m,d){
+  const dow=new Date(y,m,d).getDay();
+  // 同じ曜日が月内に何回目か
+  let count=0;
+  for(let i=1;i<=d;i++){
+    if(new Date(y,m,i).getDay()===dow)count++;
+  }
+  return count>=5;
+}
+let STAFF=JSON.parse(localStorage.getItem("shift_staff")||'["田中 あおい","佐藤 ゆい","山田 こうき","鈴木 はな","伊藤 りょう"]');
+function saveStaff(){localStorage.setItem("shift_staff",JSON.stringify(STAFF));}
+const CHIP_COLORS=[
+  {bg:"#E6F1FB",text:"#0C447C"},
+  {bg:"#EAF3DE",text:"#27500A"},
+  {bg:"#FAEEDA",text:"#633806"},
+  {bg:"#FBEAF0",text:"#72243E"},
+  {bg:"#E1F5EE",text:"#085041"}
+];
+
+let sbClient=null;
+let manualOverrides=JSON.parse(localStorage.getItem("shift_overrides")||"{}");
+function saveOverrides(){localStorage.setItem("shift_overrides",JSON.stringify(manualOverrides));}
+function isManualOpen(dateStr){return manualOverrides[dateStr]==="open";}
+function isManualClosed(dateStr){return manualOverrides[dateStr]==="closed";}
+let today=new Date(),cur=new Date(today.getFullYear(),today.getMonth(),1);
+let selected=null,activeSlots=new Set(),copyMode=false,copySrc=null;
+let shifts={};
+
+// ---- 設定 ----
+function saveSettings(){
+  const url=document.getElementById("sb-url").value.trim();
+  const key=document.getElementById("sb-key").value.trim();
+  if(!url||!key){alert("URLとAnon Keyを入力してください");return;}
+  localStorage.setItem("sb_url",url);
+  localStorage.setItem("sb_key",key);
+  initSupabase(url,key);
+}
+function resetSettings(){
+  if(!confirm("設定をリセットして接続画面に戻りますか？"))return;
+  localStorage.removeItem("sb_url");
+  localStorage.removeItem("sb_key");
+  location.reload();
+}
+function initSupabase(url,key){
+  try{
+    sbClient=window.supabase.createClient(url,key);
+    document.getElementById("setup-screen").style.display="none";
+    document.getElementById("main-screen").style.display="block";
+    renderStaffUI();
+    loadShifts();
+    // リアルタイム購読
+    sbClient.channel("shifts-channel")
+      .on("postgres_changes",{event:"*",schema:"public",table:"shifts"},()=>loadShifts())
+      .subscribe();
+  }catch(e){
+    alert("接続に失敗しました。URLとKeyを確認してください。\n"+e.message);
+  }
+}
+
+// ---- データ ----
+async function loadShifts(){
+  setSyncStatus("sync");
+  try{
+    const y=cur.getFullYear(),m=cur.getMonth();
+    const from=`${y}-${String(m+1).padStart(2,"0")}-01`;
+    const to=`${y}-${String(m+1).padStart(2,"0")}-31`;
+    const{data,error}=await sbClient.from("shifts").select("*").gte("date",from).lte("date",to);
+    if(error)throw error;
+    shifts={};
+    (data||[]).forEach(row=>{
+      if(!shifts[row.date])shifts[row.date]=[];
+      shifts[row.date].push({id:row.id,name:row.name,slots:row.slots});
+    });
+    setSyncStatus("ok");
+    render();
+  }catch(e){
+    setSyncStatus("err");
+    showToast("データ読み込みエラー: "+e.message);
+  }
+}
+
+async function saveShift(date,name,slotLabels){
+  setSyncStatus("sync");
+  try{
+    // 同じ日・同じ名前のレコードを確認
+    const existing=(shifts[date]||[]).find(s=>s.name===name);
+    if(existing){
+      const merged=[...new Set([...existing.slots,...slotLabels])].sort();
+      const{error}=await sbClient.from("shifts").update({slots:merged,updated_at:new Date().toISOString()}).eq("id",existing.id);
+      if(error)throw error;
+    }else{
+      const{error}=await sbClient.from("shifts").insert({date,name,slots:slotLabels});
+      if(error)throw error;
+    }
+    await loadShifts();
+    setSyncStatus("ok");
+  }catch(e){
+    setSyncStatus("err");
+    showToast("保存エラー: "+e.message);
+  }
+}
+
+async function pasteShiftsToDate(date,srcData){
+  setSyncStatus("sync");
+  try{
+    // 対象日の既存データを削除してから挿入
+    await sbClient.from("shifts").delete().eq("date",date);
+    if(srcData.length>0){
+      const rows=srcData.map(s=>({date,name:s.name,slots:s.slots}));
+      const{error}=await sbClient.from("shifts").insert(rows);
+      if(error)throw error;
+    }
+    await loadShifts();
+    setSyncStatus("ok");
+  }catch(e){
+    setSyncStatus("err");
+    showToast("貼り付けエラー: "+e.message);
+  }
+}
+
+function setSyncStatus(state){
+  const el=document.getElementById("sync-status");
+  if(state==="sync"){el.textContent="同期中...";el.className="sync-status";}
+  else if(state==="ok"){el.textContent="✓ 同期済み";el.className="sync-status ok";}
+  else{el.textContent="⚠ エラー";el.className="sync-status err";}
+}
+
+function key(y,m,d){return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`}
+function deepCopy(o){return JSON.parse(JSON.stringify(o))}
+
+// ---- UI ----
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2500);
+}
+function switchTab(tab){
+  document.getElementById("tab-edit").className="tab-btn"+(tab==="edit"?" active":"");
+  document.getElementById("tab-copy").className="tab-btn"+(tab==="copy"?" active":"");
+  document.getElementById("tab-delete").className="tab-btn"+(tab==="delete"?" active":"");
+  document.getElementById("edit-section").style.display=tab==="edit"?"block":"none";
+  document.getElementById("copy-section").style.display=tab==="copy"?"block":"none";
+  document.getElementById("delete-section").style.display=tab==="delete"?"block":"none";
+  if(tab==="delete")renderDeleteList();
+}
+function onOverlayClick(e){if(e.target===document.getElementById("panel-overlay"))closePanel();}
+function closePanel(){document.getElementById("panel-overlay").className="panel-overlay";}
+
+function buildSlotRows(dateKey,dow){
+  const isWE=(dow===0||dow===6);
+  const slotDefs=isWE?WEEKEND_SLOTS:WEEKDAY_SLOTS;
+  const data=shifts[dateKey]||[];
+  const bySlot={};
+  data.forEach(s=>{
+    s.slots.forEach(slotN=>{
+      const si=slotDefs.findIndex(sd=>sd.n===slotN);
+      if(si<0)return;
+      if(!bySlot[si])bySlot[si]=[];
+      bySlot[si].push({name:s.name,staffIdx:STAFF.indexOf(s.name)});
+    });
+  });
+  return Object.keys(bySlot).sort((a,b)=>a-b).map(si=>({
+    start:slotDefs[si].start,
+    entries:bySlot[si]
+  }));
+}
+
+function render(){
+  const y=cur.getFullYear(),m=cur.getMonth();
+  document.getElementById("month-label").textContent=`${y}年${m+1}月`;
+  const cal=document.getElementById("cal");
+  cal.innerHTML="";
+  const DAYS_MON=["月","火","水","木","金","土","日"];
+  DAYS_MON.forEach((d,i)=>{
+    const h=document.createElement("div");
+    h.className="day-header"+(i===5?" sat":i===6?" sun":"");
+    h.textContent=d;cal.appendChild(h);
+  });
+  const firstDow=new Date(y,m,1).getDay(); // 0=日
+  const first=(firstDow+6)%7; // 月曜始まりオフセット
+  for(let i=0;i<first;i++){const e=document.createElement("div");e.className="day-cell holiday";cal.appendChild(e);}
+  const holidays=getHolidays(y);
+  const days=new Date(y,m+1,0).getDate();
+  for(let d=1;d<=days;d++){
+    const dow=new Date(y,m,d).getDay();
+    const k=key(y,m+1,d);
+    const cell=document.createElement("div");
+    const dateStr=k; // YYYY-MM-DD形式
+    const baseHoliday=(dow===1)||holidays.has(dateStr)||isFifthWeek(y,m,d);
+    const isHoliday=isManualOpen(dateStr)?false:(baseHoliday||isManualClosed(dateStr));
+    let cls="day-cell";
+    if(isHoliday)cls+=" holiday";
+    else if(dow===0)cls+=" sun-cell";
+    else if(dow===6)cls+=" sat-cell";
+    if(today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d)cls+=" today";
+    if(copySrc&&copySrc.k===k)cls+=" copy-src";
+    if(isManualOpen(dateStr))cls+=" manual-open";
+    if(isManualClosed(dateStr))cls+=" manual-closed";
+    cell.className=cls;
+    const numDiv=document.createElement("div");
+    numDiv.className="day-num";numDiv.textContent=d;
+    // 手動制御ボタン
+    const topRow=document.createElement("div");topRow.className="cell-top-row";
+    topRow.appendChild(numDiv);
+    const ctrlBtn=document.createElement("button");
+    ctrlBtn.className="cell-ctrl-btn";
+    ctrlBtn.title=isHoliday?"登録を開くには":"グレーアウトする";
+    if(isManualOpen(dateStr)){ctrlBtn.textContent="🔓";ctrlBtn.title="手動解除中（クリックで戻す）";}
+    else if(isManualClosed(dateStr)){ctrlBtn.textContent="🔒";ctrlBtn.title="手動閉鎖中（クリックで戻す）";}
+    else if(baseHoliday){ctrlBtn.textContent="🔓";ctrlBtn.title="グレーアウトを解除して登録可能にする";}
+    else{ctrlBtn.textContent="🔒";ctrlBtn.title="手動でグレーアウトする";}
+    ctrlBtn.addEventListener("click",(e)=>{
+      e.stopPropagation();
+      if(isManualOpen(dateStr)){
+        delete manualOverrides[dateStr];
+      } else if(isManualClosed(dateStr)){
+        delete manualOverrides[dateStr];
+      } else if(baseHoliday){
+        manualOverrides[dateStr]="open";
+      } else {
+        manualOverrides[dateStr]="closed";
+      }
+      saveOverrides();render();
+    });
+    topRow.appendChild(ctrlBtn);
+    cell.appendChild(topRow);
+    if(shifts[k]&&shifts[k].length){
+      buildSlotRows(k,dow).forEach(row=>{
+        const rowDiv=document.createElement("div");rowDiv.className="slot-row";
+        const tl=document.createElement("span");tl.className="slot-time-lbl";tl.textContent=row.start;rowDiv.appendChild(tl);
+        const chipsDiv=document.createElement("div");chipsDiv.className="slot-chips";
+        row.entries.forEach(e=>{
+          const chip=document.createElement("span");chip.className="shift-chip";
+          const c=CHIP_COLORS[e.staffIdx>=0?e.staffIdx%CHIP_COLORS.length:0];
+          chip.style.background=c.bg;chip.style.color=c.text;
+          chip.textContent=e.name.split(" ")[0];chipsDiv.appendChild(chip);
+        });
+        rowDiv.appendChild(chipsDiv);cell.appendChild(rowDiv);
+      });
+    }
+    if(!isHoliday){
+      cell.addEventListener("click",()=>{
+        if(copyMode){doPaste(y,m+1,d,dow,k);}
+        else{openPanel(y,m+1,d,dow);}
+      });
+    }
+    cal.appendChild(cell);
+  }
+}
+
+function openPanel(y,m,d,dow){
+  selected={y,m,d,dow};activeSlots.clear();
+  switchTab("edit");
+  const isWE=(dow===0||dow===6);
+  const slotDefs=isWE?WEEKEND_SLOTS:WEEKDAY_SLOTS;
+  document.getElementById("sel-date-label").textContent=`${y}年${m}月${d}日（${DAYS[dow]}）`;
+  document.getElementById("slots-label").textContent=isWE?"コマを選択（土・日）":"コマを選択（火〜金）";
+  const sg=document.getElementById("slots");sg.innerHTML="";
+  slotDefs.forEach((s,i)=>{
+    const btn=document.createElement("button");btn.className="slot-btn";
+    btn.innerHTML=`<span class="s-num">${s.n}</span><span class="s-time">${s.t}</span>`;
+    btn.addEventListener("click",()=>{
+      if(activeSlots.has(i)){activeSlots.delete(i);btn.classList.remove("active");}
+      else{activeSlots.add(i);btn.classList.add("active");}
+    });
+    sg.appendChild(btn);
+  });
+  document.getElementById("staff-select").value="";
+  document.getElementById("panel-overlay").className="panel-overlay active";
+}
+
+function enterCopyMode(y,m,d,dow,k){
+  copySrc={y,m,d,dow,k,data:deepCopy(shifts[k]||[])};
+  copyMode=true;closePanel();
+  document.getElementById("copy-bar").className="copy-bar active";
+  document.getElementById("copy-src-label").textContent=`${y}年${m}月${d}日（${DAYS[dow]}）`;
+  render();showToast("貼り付け先の日付をタップしてください");
+}
+function renderDeleteList(){
+  if(!selected)return;
+  const{y,m,d,dow}=selected;
+  const k=key(y,m,d);
+  const data=shifts[k]||[];
+  const isWE=(dow===0||dow===6);
+  const slotDefs=isWE?WEEKEND_SLOTS:WEEKDAY_SLOTS;
+  const dl=document.getElementById("delete-list");
+  dl.innerHTML="";
+  if(!data.length){dl.innerHTML='<div class="delete-empty">登録がありません</div>';return;}
+  data.forEach(entry=>{
+    const div=document.createElement("div");div.className="delete-entry";
+    const si=STAFF.indexOf(entry.name);
+    const col=CHIP_COLORS[si>=0?si%CHIP_COLORS.length:0];
+    const hdr=document.createElement("div");hdr.className="delete-entry-header";
+    const nm=document.createElement("span");nm.className="delete-entry-name";
+    nm.style.color=col.text;nm.textContent=entry.name;
+    const delAll=document.createElement("button");delAll.className="delete-all-btn";
+    delAll.textContent="この人を全削除";
+    delAll.addEventListener("click",async()=>{
+      if(!confirm(`「${entry.name}」の${m}月${d}日のシフトをすべて削除しますか？`))return;
+      await deleteStaffShift(k,entry.id);
+    });
+    hdr.appendChild(nm);hdr.appendChild(delAll);div.appendChild(hdr);
+    const slotsDiv=document.createElement("div");slotsDiv.className="delete-slots";
+    entry.slots.forEach(slotN=>{
+      const sd=slotDefs.find(s=>s.n===slotN);
+      const chip=document.createElement("div");chip.className="delete-slot-chip";
+      chip.style.background=col.bg;
+      chip.innerHTML=`<span>${sd?sd.t:slotN}</span><span class="del-x">×</span>`;
+      chip.addEventListener("click",async()=>{
+        if(!confirm(`「${entry.name}」の${slotN}（${sd?sd.t:""}）を削除しますか？`))return;
+        await deleteSlot(k,entry,slotN);
+      });
+      slotsDiv.appendChild(chip);
+    });
+    div.appendChild(slotsDiv);dl.appendChild(div);
+  });
+}
+async function deleteStaffShift(dateKey,id){
+  setSyncStatus("sync");
+  try{
+    const{error}=await sbClient.from("shifts").delete().eq("id",id);
+    if(error)throw error;
+    await loadShifts();setSyncStatus("ok");renderDeleteList();showToast("削除しました");
+  }catch(e){setSyncStatus("err");showToast("削除エラー: "+e.message);}
+}
+async function deleteSlot(dateKey,entry,slotN){
+  setSyncStatus("sync");
+  try{
+    const newSlots=entry.slots.filter(s=>s!==slotN);
+    if(newSlots.length===0){
+      const{error}=await sbClient.from("shifts").delete().eq("id",entry.id);
+      if(error)throw error;
+    }else{
+      const{error}=await sbClient.from("shifts").update({slots:newSlots,updated_at:new Date().toISOString()}).eq("id",entry.id);
+      if(error)throw error;
+    }
+    await loadShifts();setSyncStatus("ok");renderDeleteList();showToast("削除しました");
+  }catch(e){setSyncStatus("err");showToast("削除エラー: "+e.message);}
+}
+function renderStaffUI(){
+  const list=document.getElementById("staff-list");
+  list.innerHTML="";
+  STAFF.forEach((name,i)=>{
+    const tag=document.createElement("div");tag.className="staff-tag";
+    const c=CHIP_COLORS[i%CHIP_COLORS.length];
+    tag.style.background=c.bg;tag.style.color=c.text;
+    const span=document.createElement("span");span.textContent=name;
+    tag.appendChild(span);
+    const btn=document.createElement("button");btn.className="staff-tag-del";btn.textContent="×";btn.title="削除";
+    btn.addEventListener("click",()=>{
+      if(!confirm(`「${name}」を削除しますか？`))return;
+      STAFF.splice(i,1);saveStaff();renderStaffUI();
+    });
+    tag.appendChild(btn);list.appendChild(tag);
+  });
+  updateStaffSelect();
+}
+function updateStaffSelect(){
+  const sel=document.getElementById("staff-select");
+  const cur=sel.value;
+  sel.innerHTML='<option value="">選択してください</option>';
+  STAFF.forEach(name=>{
+    const o=document.createElement("option");o.value=name;o.textContent=name;sel.appendChild(o);
+  });
+  if(STAFF.includes(cur))sel.value=cur;
+}
+function addStaff(){
+  const inp=document.getElementById("staff-add-input");
+  const name=inp.value.trim();
+  if(!name){alert("名前を入力してください");return;}
+  if(STAFF.includes(name)){alert("すでに登録されています");return;}
+  if(STAFF.length>=10){alert("スタッフは最大10人までです");return;}
+  STAFF.push(name);saveStaff();renderStaffUI();inp.value="";
+}
+function exitCopyMode(){
+  copyMode=false;copySrc=null;
+  document.getElementById("copy-bar").className="copy-bar";render();
+}
+async function doPaste(y,m,d,dow,k){
+  if(!copySrc||!copySrc.data.length){showToast("コピー元にシフトがありません");exitCopyMode();return;}
+  if(k===copySrc.k){showToast("同じ日です");return;}
+  const srcData=copySrc.data;
+  exitCopyMode();
+  await pasteShiftsToDate(k,srcData);
+  showToast(`${m}月${d}日に貼り付けました`);
+}
+
+document.getElementById("copy-same-dow").addEventListener("click",async()=>{
+  if(!copySrc)return;
+  const{dow,k,data}=copySrc;
+  const y=cur.getFullYear(),m=cur.getMonth();
+  const days=new Date(y,m+1,0).getDate();
+  const targets=[];
+  const holidays2=getHolidays(y);
+  for(let d=1;d<=days;d++){
+    const dd=new Date(y,m,d);
+    const dk=key(y,m+1,d);
+    if(dd.getDay()===dow&&!holidays2.has(dk)&&!isFifthWeek(y,m,d)&&dk!==k)targets.push(dk);
+  }
+  for(const dk of targets)await pasteShiftsToDate(dk,data);
+  exitCopyMode();showToast(`${DAYS[dow]}曜日 ${targets.length}日分に貼り付けました`);
+});
+
+document.getElementById("copy-week").addEventListener("click",async()=>{
+  if(!copySrc)return;
+  const{y,m,d,dow,k,data}=copySrc;
+  const srcDate=new Date(y,m-1,d); // m is 1-indexed from copySrc
+  const dowMon=(dow+6)%7; // 月曜=0
+  const weekStart=new Date(srcDate);weekStart.setDate(srcDate.getDate()-dowMon);
+  const targets=[];
+  for(let i=0;i<7;i++){
+    const td=new Date(weekStart);td.setDate(weekStart.getDate()+i);
+    const tdY=td.getFullYear(),tdM=td.getMonth(),tdD=td.getDate();
+    const dk=key(tdY,tdM+1,tdD);
+    const holidays3=getHolidays(tdY);
+    if(td.getDay()===1||holidays3.has(dk)||isFifthWeek(tdY,tdM,tdD))continue;
+    if(dk!==k)targets.push(dk);
+  }
+  for(const dk of targets)await pasteShiftsToDate(dk,data);
+  exitCopyMode();showToast(`同じ週の${targets.length}日分に貼り付けました`);
+});
+
+document.getElementById("copy-cancel").addEventListener("click",exitCopyMode);
+
+document.getElementById("start-copy-btn").addEventListener("click",()=>{
+  if(!selected)return;
+  const{y,m,d,dow}=selected;
+  const k=key(y,m,d);
+  if(!shifts[k]||!shifts[k].length){showToast("この日にシフトがありません");return;}
+  enterCopyMode(y,m,d,dow,k);
+});
+
+document.getElementById("save-btn").addEventListener("click",async()=>{
+  const name=document.getElementById("staff-select").value;
+  if(!name){alert("スタッフを選択してください");return;}
+  if(activeSlots.size===0){alert("コマを選択してください");return;}
+  const{y,m,d,dow}=selected;
+  const isWE=(dow===0||dow===6);
+  const slotDefs=isWE?WEEKEND_SLOTS:WEEKDAY_SLOTS;
+  const slotLabels=[...activeSlots].map(i=>slotDefs[i].n);
+  closePanel();
+  await saveShift(key(y,m,d),name,slotLabels);
+  showToast("登録しました");
+});
+
+document.getElementById("prev").addEventListener("click",()=>{cur.setMonth(cur.getMonth()-1);loadShifts();});
+document.getElementById("next").addEventListener("click",()=>{cur.setMonth(cur.getMonth()+1);loadShifts();});
+
+// Enterキーでスタッフ追加
+document.addEventListener("DOMContentLoaded",()=>{
+  const inp=document.getElementById("staff-add-input");
+  if(inp)inp.addEventListener("keydown",e=>{if(e.key==="Enter")addStaff();});
+});
+
+// 起動（URLとKeyを直接埋め込み）
+const SB_URL="https://rnaccmvrdyxqtietvxtw.supabase.co";
+const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJuYWNjbXZyZHl4cXRpZXR2eHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNjkyMDgsImV4cCI6MjA4ODk0NTIwOH0.ujM6sofosmqNIkH8yH5djWN3dnDyMDDSoeJAsjFqeuo";
+initSupabase(SB_URL,SB_KEY);
+</script>
+</body>
+</html>
