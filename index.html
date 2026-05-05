@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#FFF3E8;color:#1a1a1a;min-height:100vh}
 .app{max-width:900px;margin:0 auto;padding:1rem}
 
 /* 設定画面 */
@@ -38,8 +38,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* ナビ */
 .nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .nav-title{font-size:17px;font-weight:500}
-.nav-btn{background:#fff;border:0.5px solid #ccc;border-radius:8px;padding:5px 14px;cursor:pointer;font-size:13px;color:#555}
-.nav-btn:hover{background:#f0f0f0}
+.nav-btn{background:#fff;border:0.5px solid #F97316;border-radius:8px;padding:5px 14px;cursor:pointer;font-size:13px;color:#C2410C}
+.nav-btn:hover{background:#FFF3E8}
 
 /* コピーバー */
 .copy-bar{background:#EAF3DE;border:0.5px solid #C0DD97;border-radius:10px;padding:10px 14px;margin-bottom:1rem;display:none;align-items:center;gap:10px;flex-wrap:wrap}
@@ -62,7 +62,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .day-header.sun{color:#D85A30}.day-header.sat{color:#185FA5}
 .day-cell{background:#fff;border:0.5px solid #e0e0e0;border-radius:6px;min-height:90px;padding:5px;cursor:pointer;transition:border-color 0.15s;overflow:hidden}
 .day-cell:hover{border-color:#aaa}
-.day-cell.holiday{background:#f5f4f0;cursor:default}
+.day-cell.holiday{background:#FFE0C2;cursor:default}
 .day-cell.copy-src{border:1.5px solid #378ADD;background:#E6F1FB}
 .day-cell.manual-open{border:1.5px dashed #1D9E75!important;background:#F0FAF5!important;cursor:pointer!important}
 .day-cell.manual-closed{background:#e8e8e8!important;cursor:default!important}
@@ -143,7 +143,7 @@ select:focus{outline:none;border-color:#378ADD}
 .day-cell.holiday:hover .cell-ctrl-btn{opacity:0.5}
 
 /* スタッフ管理 */
-.staff-mgr{background:#fff;border:0.5px solid #e0e0e0;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem}
+.staff-mgr{background:#fff;border:0.5px solid #FBBF8C;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem}
 .staff-mgr-body{display:none}
 .staff-mgr.open .staff-mgr-body{display:block}
 .staff-mgr-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
@@ -348,7 +348,7 @@ function isFifthWeek(y,m,d){
   }
   return count>=5;
 }
-let STAFF=JSON.parse(localStorage.getItem("shift_staff")||'["田中 あおい","佐藤 ゆい","山田 こうき","鈴木 はな","伊藤 りょう"]');
+let STAFF=JSON.parse(localStorage.getItem("shift_staff")||'[]');
 function saveStaff(){localStorage.setItem("shift_staff",JSON.stringify(STAFF));}
 const CHIP_COLORS=[
   {bg:"#D0E8F8",text:"#0C447C"},
@@ -487,6 +487,11 @@ function switchTab(tab){
 function onOverlayClick(e){if(e.target===document.getElementById("panel-overlay"))closePanel();}
 function closePanel(){document.getElementById("panel-overlay").className="panel-overlay";}
 
+function nameToColor(name){
+  let hash=0;
+  for(let i=0;i<name.length;i++)hash=(hash*31+name.charCodeAt(i))&0xffff;
+  return CHIP_COLORS[hash%CHIP_COLORS.length];
+}
 function buildSlotRows(dateKey,dow){
   const isWE=(dow===0||dow===6);
   const slotDefs=isWE?WEEKEND_SLOTS:WEEKDAY_SLOTS;
@@ -572,7 +577,7 @@ function render(){
         const chipsDiv=document.createElement("div");chipsDiv.className="slot-chips";
         row.entries.forEach(e=>{
           const chip=document.createElement("span");chip.className="shift-chip";
-          const c=CHIP_COLORS[e.staffIdx>=0?e.staffIdx%CHIP_COLORS.length:0];
+          const c=e.staffIdx>=0?CHIP_COLORS[e.staffIdx%CHIP_COLORS.length]:nameToColor(e.name);
           chip.style.background=c.bg;chip.style.color=c.text;
           chip.textContent=e.name.split(" ")[0];chipsDiv.appendChild(chip);
         });
